@@ -43,7 +43,7 @@ int:		.word 0
 	li $a1, 64		# Size is 64 bits
 	syscall
 	
-	# Print promptInt (REMOVE ME)
+	# Print promptInt
 	li, $v0, 4		# Syscall to print
 	la, $a0, promptInt	# Load address of promptInt
 	syscall
