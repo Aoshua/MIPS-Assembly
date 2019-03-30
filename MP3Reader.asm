@@ -1,10 +1,10 @@
 # Author: Joshua Abbott
-# Date:	  03/28/2019
+# Date:	  03/30/2019
 # Desc:   The program processes information from an array and decodes MP3 information from the header
 #	  file based on an MP3 map. 
  
 .data
-	intro:		.asciiz		"Joshua Abbott\nCS2810 HW#5\n"
+	intro:		.asciiz		"Joshua Abbott\n"
 	prompt:		.asciiz		"\nNow Processing:\n"
 	
 	mpeg_0:		.asciiz		"\nMPEG Version 2.5\n"
@@ -17,7 +17,6 @@
 	layer_2:	.asciiz		"Layer II\n"
 	layer_3:	.asciiz		"Layer I\n"
 	
-	buffer:		.space	10 	#Save the user input
 	mpeg:		.word 0
 	
 	# Array indexes       0           4           8          12
@@ -28,7 +27,29 @@
 	sample_1:	.word 48000,      24000,      12000 
 	sample_2:	.word 32000,      16000,      8000 
 	
+	# Table of labels for sampling:
+        sr_types:  	.word sp_mpeg25, sp_re, sp_mepg20, sp_mpeg10
+	# Tables with sampling values
+       	sr_mp1_00: 	.asciiz "44100 Hz\n"
+        sr_mp1_01: 	.asciiz "48000 Hz\n"
+        sr_mp1_10: 	.asciiz "32000 Hz\n"
+        sr_mp1_11: 	.asciiz "Reserved\n"
+        sr_mp1_types: 	.word sr_mp1_00, sr_mp1_01, sr_mp1_10, sr_mp1_11
+
+        sr_mp2_00: 	.asciiz "22050 Hz\n"
+        sr_mp2_01: 	.asciiz "24000 Hz\n"
+        sr_mp2_10: 	.asciiz "16000 Hz\n"
+        sr_mp2_11: 	.asciiz "Reserved\n"
+        sr_mp2_types: 	.word sr_mp2_00, sr_mp2_01, sr_mp2_10, sr_mp2_11
+
+        sr_mp25_00: 	.asciiz "11025 Hz\n"
+        sr_mp25_01:	.asciiz "12000 Hz\n"
+        sr_mp25_10:	.asciiz "8000 Hz\n"
+        sr_mp25_11: 	.asciiz "Reserved\n"
+        sr_mp25_types:	.word sr_mp25_00, sr_mp25_01, sr_mp25_10, sr_mp25_11
+	
 ###########################################################	
+
 	.text
 .globl main	
 	.text
@@ -46,14 +67,14 @@ loop:
 	
 	jal GetLayer		# Call void GetLayer
 	
-	jal GetSampling	# Call void GetSampling
+	jal GetSampling		# Call void GetSampling
 		
 	addi $t1, $t1, 1	# Update counter
 
 	ble $t1, 2, loop	# branch to loop if(t1 <= 2)
 	
 exit:				# Exit code 
-	li $v0, 10		# code==0, so exit program
+	li $v0, 10		
 	syscall
 
 ################################################################
@@ -67,7 +88,7 @@ PrintInfo:
 	syscall
 	
 PrintInfoRet:
-	jr $ra		# return
+	jr $ra		# Return
 	
 ################################################################
 # Procedure void GetMPEG(&array)
@@ -115,7 +136,7 @@ GetMPEG:
 	syscall
 	
 GetMPEGRet:
-	jr $ra		# return
+	jr $ra				# Return
 	
 ################################################################
 # Procedure GetLayer(&array)
@@ -145,7 +166,7 @@ GetLayer:
 	syscall	
 	
 GetLayerRet:
-	jr $ra		# return
+	jr $ra				# Return
 	
 ################################################################
 # Procedure GetSampling(&array)
@@ -153,11 +174,18 @@ GetLayerRet:
 #			  uses the MPEG version found int the
 #			  GetMPEG procedure, which was stored
 #			  in $s0
-
+# Register mapping:
+#	$t1 = loop counter 	  $t2 = adjusted counter 1
+#	$t3 = mp3_hdr[i]	  $t4 = adjusted counter 2
+#	$t5 = mpNumType[j]	  $s2 = rampling rate index
+#	$s0 = MPEG version index
 ################################################################
 GetSampling:
-	# AND 0000 0000 0000 0000 0000 0110 0000 0000 = 0x600
-	# srl 10
+
+	# Pseudocode:
+	# Very similar to the first method only AND 0x600,
+	# SRL 10, and use a switch with a table of values
+	# to print the sampling rate frequency.
 	
 	mul $t2, $t1, 4			# Adjust counter address to match word size (4)
 	lw $t3, mp3_hdr($t2)		# $t3 = mp3_hdr[i]
@@ -166,35 +194,43 @@ GetSampling:
 	srl $s2, $t3, 10		# s2 = t3 shifted right 10
 	
 	mul $t4, $s0, 4			# Adjust counter for version num
+    	
+    	beq $s0, 0, sp_mpeg25		# if(s0 == V2.5)
+	beq $s0, 1, sp_re		# if(s0 == Reserved)
+	beq $s0, 2, sp_mepg20		# if(s0 == V2.0)
+	beq $s0, 3, sp_mpeg10		# if(s0 == V1.0)
 	
-	beq $s2, 0, case0		# if(s2 == 00)
-	beq $s2, 1, case1		# if(s2 == 01)
-	beq $s2, 2, case2		# if(s2 == 10)
-	beq $s2, 3, case3		# if(s2 == 11)
-	
-	case0:
-		lw $t5, sample_0($t4)		# t5 = sample(k)
+	# Similar to a switch:
+	sp_mpeg25: 
+		lw $t5, sr_mp25_types($t4)	# t5 = sr_mp25_types[t4]
 		
-		li $v0, 4			# print(mpeg_types[$t4])
+		li $v0, 4			# print(sr_mp25_types[$t4])
 		la $a0, ($t5)
 		syscall
 		
-	case1:
-		lw $t5, sample_1($t4)
-		
-		li $v0, 4			# print(mpeg_types[$t4])
-		la $a0, ($t5)
-		syscall
-	case2:
-		lw $t5, sample_2($t4)
-		
-		li $v0, 4			# print(mpeg_types[$t4])
-		la $a0, ($t5)
-		syscall
-	case3:
-		li $v0, 4
+		j GetSampRet			# Break
+	sp_re:	
+		li $v0, 4			# print(layer_0)
 		la $a0, layer_0
 		syscall
+		
+		j GetSampRet			# Break
+	sp_mepg20:
+		lw $t5, sr_mp2_types($t4)	# t5 = sr_mp2_types[t4]
+		
+		li $v0, 4			# print(sr_mp2_types[$t4])
+		la $a0, ($t5)
+		syscall
+		
+		j GetSampRet			# Break
+	sp_mpeg10:
+		lw $t5, sr_mp1_types($t4)	# t5 = sr_mp1_types[t4]
+		
+		li $v0, 4			# print(sr_mp1_types[$t4])
+		la $a0, ($t5)
+		syscall
+		
+		j GetSampRet			# Break
 	
 GetSampRet:
-	jr $ra
+	jr $ra					# Return
